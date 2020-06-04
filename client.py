@@ -40,7 +40,7 @@ def start(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--host', help='The host that the client should connect to.', default="0.0.0.0")
+    parser.add_argument('--host', help='The host that the client should connect to.', default="127.0.0.1")
     parser.add_argument('--port', help='The port that the client should connect to.', type=int, default=61592)
     parser.add_argument('--verbose', '-v', help="Increases the logging verbosity level.", action='count')
     parser.add_argument('--count', '-c', help='Number of udp packets to be sent', type=int, default=1)
