@@ -44,6 +44,9 @@ if __name__ == "__main__":
     parser.add_argument('--port', help='The port that the client should connect to.', type=int, default=61592)
     parser.add_argument('--verbose', '-v', help="Increases the logging verbosity level.", action='count')
     parser.add_argument('--count', '-c', help='Number of udp packets to be sent', type=int, default=1)
+    if len(sys.argv) == 1:
+        parser.print_help(sys.stderr)
+        sys.exit(1)
     args = parser.parse_args()
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format='%(asctime)s %(levelname)s %(message)s')
