@@ -30,7 +30,7 @@ def start(args):
     addr = (args.host, args.port)
     i = 1
     try:
-        while i <= args.count
+        while i <= args.count:
             message = "This is message #{}.".format(i)
             send_and_receive_one(sock, message, addr)
             i = i + 1
