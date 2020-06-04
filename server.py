@@ -46,7 +46,7 @@ def start(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--host', help='The host that the server socket should bind to.', default="0.0.0.0")
-    parser.add_argument('--port', help='The port that the server socket should bind to.', type=int, default=123)
+    parser.add_argument('--port', help='The port that the server socket should bind to.', type=int, default=61592)
     parser.add_argument('--verbose', '-v', help="Increases the logging verbosity level.", action='count')
     args = parser.parse_args()
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
