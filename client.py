@@ -28,20 +28,22 @@ def start(args):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.settimeout(1) # seconds
     addr = (args.host, args.port)
+    i = 1
     try:
-        for i in itertools.count(1):
+        while i <= args.count
             message = "This is message #{}.".format(i)
             send_and_receive_one(sock, message, addr)
-            time.sleep(1) # seconds
+            i = i + 1
     finally:
         logger.info("Shutting down.")
         sock.close()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--host', help='The host that the client should connect to.', default="127.0.0.1")
-    parser.add_argument('--port', help='The port that the client should connect to.', type=int, default=123)
+    parser.add_argument('--host', help='The host that the client should connect to.', default="0.0.0.0")
+    parser.add_argument('--port', help='The port that the client should connect to.', type=int, default=61592)
     parser.add_argument('--verbose', '-v', help="Increases the logging verbosity level.", action='count')
+    parser.add_argument('--count', '-c', help='Number of udp packets to be sent', type=int, default=1)
     args = parser.parse_args()
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format='%(asctime)s %(levelname)s %(message)s')
