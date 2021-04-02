@@ -1,11 +1,17 @@
-# udp-echo-server
+# udpecho server and client
 
-A Python 3 UDP echo server for testing connectivity.
+A Python 3 UDP echo server and client for testing connections.
 
 ## Usage
 
-```
-$ sudo python server.py --port 123  # on the server
+### Server
 
-$ python client.py --host $IP --port 123  --count 10 --size 1200 # on the client
+```
+$ sudo python udpecho.py --server
+```
+
+### Client
+
+```
+$ sudo python udpecho.py --host $IP --count 10 --size 1200 --interval 2
 ```
