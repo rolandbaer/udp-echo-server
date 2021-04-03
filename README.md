@@ -7,11 +7,11 @@ A Python 3 UDP echo server and client for testing connections.
 ### Server
 
 ```
-$ sudo python udpecho.py --server
+$ sudo python3 udpecho.py --server
 ```
 
 ### Client
 
 ```
-$ sudo python udpecho.py --host $IP --count 10 --size 1200 --interval 2
+$ sudo python3 udpecho.py --client $IP --count 5 --size 1200 --interval 2
 ```
