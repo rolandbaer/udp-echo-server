@@ -32,20 +32,20 @@ UDP_HEADER_LENGTH = 8
 # IP Protocol version
 IP_V4 = 4
 
-def send_and_receive_one(sender, listener, message, addr, ip_id):
+def send_and_receive_one(sender, listener, message, addr, ip_id, host_address):
     "Sends the message over the sender socket and waits for the response on the listener socket."
-    send_udp_message(message, addr, ip_id, sender)
+    send_udp_message(message, addr, ip_id, sender, host_address, args.cport)
     try:
         input_data, addr = listener.recvfrom(BUFFER_SIZE)
         logger.info("Received message back from %s: %s (%s bytes).", addr, input_data.decode(), len(input_data))
     except socket.timeout:
         logger.warning("Message never received back from %s: (%s).", addr, message)
 
-def send_udp_message(message, addr, ip_id, sender):
+def send_udp_message(message, addr, ip_id, sender, sender_address, sender_port):
     "Sends the message over the socket as an self-built udp/ip packet"
     message_encoded = message.encode()
-    udp_msg = struct.pack("!HHHH"+str(len(message_encoded))+"s", CLIENT_PORT, addr[1], UDP_HEADER_LENGTH + len(message_encoded), DUMMY_CHECKSUM, message_encoded)
-    ip_header = struct.pack("!BBHHHBBHLL", IP_V4*16+IP_HEADER_LENGTH_WORDS, 0, IP_HEADER_LENGTH + len(udp_msg), ip_id, DONT_FRAGMENT, 255, socket.IPPROTO_UDP, DUMMY_CHECKSUM, 0x7f000001, int(ipaddress.IPv4Address(addr[0])))
+    udp_msg = struct.pack("!HHHH"+str(len(message_encoded))+"s", sender_port, addr[1], UDP_HEADER_LENGTH + len(message_encoded), DUMMY_CHECKSUM, message_encoded)
+    ip_header = struct.pack("!BBHHHBBHLL", IP_V4*16+IP_HEADER_LENGTH_WORDS, 0, IP_HEADER_LENGTH + len(udp_msg), ip_id, DONT_FRAGMENT, 255, socket.IPPROTO_UDP, DUMMY_CHECKSUM, int(ipaddress.IPv4Address(sender_address)), int(ipaddress.IPv4Address(addr[0])))
     data = ip_header + udp_msg
     output_len = sender.sendto(data, addr)
     logger.info("Sent message to %s: %s (%s bytes, total %s bytes).", addr, message, len(message_encoded), output_len)
@@ -63,9 +63,10 @@ def receive_next(listener):
 def receive_and_send_one(listener, sender, ip_id):
     "Waits for a single datagram over the socket and echoes it back."
     input_data, addr = receive_next(listener)
+    host_addr = listener.getsockname()
     message = input_data.decode()
     logger.info("Received message from %s: %s (%s bytes).", addr, message, len(input_data))
-    send_udp_message(message, addr, ip_id, sender)
+    send_udp_message(message, addr, ip_id, sender, host_addr[0], args.port)
 
 
 def start_client(args):
@@ -74,13 +75,19 @@ def start_client(args):
     sender = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
     listener = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     listener.settimeout(1)  # seconds
-    listener.bind(('127.0.0.1', CLIENT_PORT))
-    addr = (args.host, args.port) 
+    listener.bind((args.host, args.cport))
+    if args.host == "0.0.0.0":
+        hostname = socket.gethostname()
+        host_address = socket.gethostbyname(hostname)
+    else:
+        host_address = args.host
+
+    addr = (args.client, args.port) 
     message = ''.join(choice(ascii_uppercase) for i in range(args.size))
     i = 1
     try:
         while i <= args.count:
-            send_and_receive_one(sender, listener, message, addr, ip_id)
+            send_and_receive_one(sender, listener, message, addr, ip_id, host_address)
             ip_id = (ip_id + 1) % 65536 
             i = i + 1
             if i <= args.count:
@@ -98,6 +105,7 @@ def start_server(args):
     listener = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     listener.settimeout(5)  # seconds
     listener.bind((args.host, args.port))
+    
     logger.info("Listening on %s:%s.", args.host, args.port)
     try:
         for i in itertools.count(1):
@@ -111,13 +119,16 @@ def start_server(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(__doc__, formatter_class = argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--server', '-S', help= 'Run in server mode.', action = 'store_true')
-    parser.add_argument('--host', help = 'The host that the client should connect to.', default = "127.0.0.1")
-    parser.add_argument('--port', help = 'The port that the client should connect to.', type = int, default = SERVER_PORT)
-    parser.add_argument('--verbose', '-v', help = "Increases the logging verbosity level.", action = 'count')
-    parser.add_argument('--count', '-c', help = 'Number of udp packets to be sent', type = int, default = 1)
-    parser.add_argument('--size', '-s', help = 'size of udp data to be sent in payload', type = int, default = 64)
-    parser.add_argument('--interval', '-i', help = 'Interval of sending in seconds', type = int, default = 1)
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('-C', '--client', help = 'Run in client mode, connect to the given HOST.', metavar = "HOST")
+    group.add_argument('-S', '--server', help= 'Run in server mode.', action = 'store_true')
+    parser.add_argument('-H', '--host', help = 'The host that the listener should listen on.', default = "0.0.0.0")
+    parser.add_argument('-p', '--port', help = 'Server port to listen on/connect to.', type = int, default = SERVER_PORT)
+    parser.add_argument('--cport', help = 'The port that the client will use to listen for the reply.', type = int, default = CLIENT_PORT)
+    parser.add_argument('-c', '--count', help = 'Number of udp packets to be sent', type = int, default = 1)
+    parser.add_argument('-s', '--size', help = 'Size of udp data to be sent in payload', type = int, default = 64)
+    parser.add_argument('-i', '--interval', help = 'Interval of sending in seconds', type = int, default = 1)
+    parser.add_argument('-v', '--verbose', help = "Increases the logging verbosity level.", action = 'count')
     if len(sys.argv) == 1:
         parser.print_help(sys.stderr)
         sys.exit(1)
