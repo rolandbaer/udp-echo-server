@@ -25,6 +25,7 @@ SERVER_PORT = 2001
 DUMMY_CHECKSUM = 0
 # Don't fragment flag set, other flags not set, fragment offset 0
 DONT_FRAGMENT = 0x4000
+FRAGMENTATION_ALLOWED = 0x0000
 # Header legths
 IP_HEADER_LENGTH_WORDS = 5
 IP_HEADER_LENGTH = IP_HEADER_LENGTH_WORDS * 4
@@ -47,7 +48,7 @@ def send_udp_message(message, addr, ip_id, sender, sender_address, sender_port):
     "Sends the message over the socket as an self-built udp/ip packet"
     message_encoded = message.encode()
     udp_msg = struct.pack("!HHHH"+str(len(message_encoded))+"s", sender_port, addr[1], UDP_HEADER_LENGTH + len(message_encoded), DUMMY_CHECKSUM, message_encoded)
-    ip_header = struct.pack("!BBHHHBBHLL", IP_V4*16+IP_HEADER_LENGTH_WORDS, 0, IP_HEADER_LENGTH + len(udp_msg), ip_id, DONT_FRAGMENT, 255, socket.IPPROTO_UDP, DUMMY_CHECKSUM, int(ipaddress.IPv4Address(sender_address)), int(ipaddress.IPv4Address(addr[0])))
+    ip_header = struct.pack("!BBHHHBBHLL", IP_V4*16+IP_HEADER_LENGTH_WORDS, 0, IP_HEADER_LENGTH + len(udp_msg), ip_id, DONT_FRAGMENT if args.dontfragment else FRAGMENTATION_ALLOWED, 255, socket.IPPROTO_UDP, DUMMY_CHECKSUM, int(ipaddress.IPv4Address(sender_address)), int(ipaddress.IPv4Address(addr[0])))
     data = ip_header + udp_msg
     output_len = sender.sendto(data, addr)
     logger.info("Sent message to %s: %s (%s bytes, total %s bytes).", addr, message, len(message_encoded), output_len)
@@ -128,6 +129,7 @@ if __name__ == "__main__":
     group_client_server = parser.add_argument_group("For client and server")
     group_client_server.add_argument('-H', '--host', help = 'The host that the listener should listen on.', default = "0.0.0.0")
     group_client_server.add_argument('-p', '--port', help = 'Server port to listen on/connect to.', type = int, default = SERVER_PORT)
+    group_client_server.add_argument('-d', '--dontfragment', help = 'Sets the don''t fragment flag (default: not set).', action = 'store_true')
     group_client = parser.add_argument_group("Only for client")
     group_client.add_argument('--cport', help = 'The port that the client will use to listen for the reply.', type = int, default = CLIENT_PORT)
     group_client.add_argument('-s', '--size', help = 'Size of udp data to be sent in payload  (default: 64).', type = int, default = 64)
