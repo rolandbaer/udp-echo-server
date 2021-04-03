@@ -31,6 +31,8 @@ IP_HEADER_LENGTH = IP_HEADER_LENGTH_WORDS * 4
 UDP_HEADER_LENGTH = 8
 # IP Protocol version
 IP_V4 = 4
+# characters reserved for counter: #12345#Message
+COUNTER_SIZE = 7
 
 def send_and_receive_one(sender, listener, message, addr, ip_id, host_address):
     "Sends the message over the sender socket and waits for the response on the listener socket."
@@ -83,11 +85,12 @@ def start_client(args):
         host_address = args.host
 
     addr = (args.client, args.port) 
-    message = ''.join(choice(ascii_uppercase) for i in range(args.size))
+    message = ''.join(choice(ascii_uppercase) for i in range(args.size - COUNTER_SIZE))
     i = 1
     try:
         while i <= args.count:
-            send_and_receive_one(sender, listener, message, addr, ip_id, host_address)
+            message_with_counter = "#{:05d}#{}".format(i % 100000, message)
+            send_and_receive_one(sender, listener, message_with_counter, addr, ip_id, host_address)
             ip_id = (ip_id + 1) % 65536 
             i = i + 1
             if i <= args.count:
