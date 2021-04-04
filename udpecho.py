@@ -3,6 +3,8 @@
 An UDP echo server and client that writes its own UDP and IPv4 headers
 and allows to control udp and ip header fields.
 """
+__version__ = "0.5.0"
+
 import argparse
 import ipaddress
 import itertools
@@ -136,6 +138,7 @@ if __name__ == "__main__":
     group_client.add_argument('-c', '--count', help = 'Number of udp packets to be sent. (default: 1)', type = int, default = 1)
     group_client.add_argument('-i', '--interval', help = 'Seconds between two sendings (default: 1 second).', type = int, default = 1)
     parser.add_argument('-v', '--verbose', help = "Increases the logging verbosity level.", action = 'count')
+    parser.add_argument('-V', '--version', help = "Show version information and quit.", action='version', version='UDPecho version ' + __version__)
     if len(sys.argv) == 1:
         parser.print_help(sys.stderr)
         sys.exit(1)
