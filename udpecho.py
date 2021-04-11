@@ -3,7 +3,7 @@
 An UDP echo server and client that writes its own UDP and IPv4 headers
 and allows to control udp and ip header fields.
 """
-__version__ = "0.5.1"
+__version__ = "0.5.2"
 
 import argparse
 import ipaddress
@@ -14,7 +14,7 @@ import struct
 import sys
 import time
 from dataclasses import dataclass
-from random import choice
+from random import choice, randint
 from string import ascii_uppercase
 
 LOGGER = logging.getLogger(__name__)
@@ -41,20 +41,20 @@ COUNTER_SIZE = 7
 @dataclass
 class Sockets:
     "Container of sending and listening sockets"
-    def __init__(self, sender, listener):
+    def __init__(self, sender: socket.socket, listener: socket.socket):
         self.sender = sender
         self.listener = listener
 
 @dataclass
 class ProtocolData:
     "Container for protocol data"
-    def __init__(self, ip_id, address, port, dontfragment):
+    def __init__(self, ip_id: int, address: str, port: int, dontfragment: bool):
         self.ip_id = ip_id
         self.address = address
         self.port = port
         self.dontfragment = dontfragment
 
-def send_and_receive_one(sockets, message, addr, protocol_data):
+def send_and_receive_one(sockets: Sockets, message: str, addr: tuple, protocol_data: ProtocolData):
     "Sends the message over the sender socket and waits for the response on the listener socket."
     send_udp_message(message, addr, sockets.sender, protocol_data)
     try:
@@ -64,7 +64,7 @@ def send_and_receive_one(sockets, message, addr, protocol_data):
     except socket.timeout:
         LOGGER.warning("Message never received back from %s: (%s).", addr, message)
 
-def send_udp_message(message, addr, sender, protocol_data):
+def send_udp_message(message: str, addr: tuple, sender: socket.socket, protocol_data: ProtocolData):
     "Sends the message over the socket as an self-built udp/ip packet"
     message_encoded = message.encode()
     udp_msg = struct.pack("!HHHH"+str(len(message_encoded))+"s",
@@ -86,7 +86,7 @@ def send_udp_message(message, addr, sender, protocol_data):
     LOGGER.info("Sent message to %s: %s (%s bytes, total %s bytes).", addr, message,
                 len(message_encoded), output_len)
 
-def receive_next(listener):
+def receive_next(listener: socket.socket):
     "Repeatedly tries receiving on the given socket until some data comes in."
     LOGGER.debug("Waiting to receive data...")
     while True:
@@ -95,7 +95,7 @@ def receive_next(listener):
         except socket.timeout:
             LOGGER.debug("No data received yet: retrying.")
 
-def receive_and_send_one(sockets, ip_id, port, dontfragment):
+def receive_and_send_one(sockets: Sockets, ip_id: int, port: int, dontfragment: bool):
     "Waits for a single datagram over the socket and echoes it back."
     input_data, addr = receive_next(sockets.listener)
     host_addr = sockets.listener.getsockname()
@@ -103,6 +103,15 @@ def receive_and_send_one(sockets, ip_id, port, dontfragment):
     LOGGER.info("Received message from %s: %s (%s bytes).", addr, message, len(input_data))
     protocol_data = ProtocolData(ip_id, host_addr[0], port, dontfragment)
     send_udp_message(message, addr, sockets.sender, protocol_data)
+
+def get_local_ip(target: str):
+    "Gets the IP address of the interfaces used to connect to the target."
+    temp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    temp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    temp_socket.connect((target, 0))
+    my_ip = temp_socket.getsockname()[0]
+    temp_socket.close()
+    return my_ip
 
 def start_client(arguments):
     "Starts sending messages to the server."
@@ -112,8 +121,8 @@ def start_client(arguments):
     listener.settimeout(1)  # seconds
     listener.bind((arguments.host, arguments.cport))
     if arguments.host == "0.0.0.0":
-        hostname = socket.gethostname()
-        host_address = socket.gethostbyname(hostname)
+        host_address = get_local_ip(arguments.client)
+        LOGGER.debug("Clients IP: %s", host_address)
     else:
         host_address = arguments.host
 
@@ -139,7 +148,7 @@ def start_client(arguments):
 
 def start_server(arguments):
     "Runs the server."
-    ip_id = time.time_ns() % 65536
+    ip_id = randint(0, 65535)
     sender = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
     listener = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     listener.settimeout(5)  # seconds
