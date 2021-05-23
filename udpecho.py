@@ -115,7 +115,7 @@ def get_local_ip(target: str):
 
 def start_client(arguments):
     "Starts sending messages to the server."
-    ip_id = time.time_ns() % 65536
+    ip_id = randint(0, 65535)
     sender = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
     listener = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     listener.settimeout(1)  # seconds
