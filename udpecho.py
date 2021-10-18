@@ -61,8 +61,10 @@ def send_and_receive_one(sockets: Sockets, message: str, addr: tuple, protocol_d
         input_data, addr = sockets.listener.recvfrom(BUFFER_SIZE)
         LOGGER.info("Received message back from %s: %s (%s bytes).",
                     addr, input_data.decode(), len(input_data))
+        return True
     except socket.timeout:
         LOGGER.warning("Message never received back from %s: (%s).", addr, message)
+        return False
 
 def send_udp_message(message: str, addr: tuple, sender: socket.socket, protocol_data: ProtocolData):
     "Sends the message over the socket as an self-built udp/ip packet"
@@ -129,18 +131,22 @@ def start_client(arguments):
     addr = (arguments.client, arguments.port)
     message = ''.join(choice(ascii_uppercase) for i in range(arguments.size - COUNTER_SIZE))
     i = 1
+    received = 0;
     try:
         while i <= arguments.count:
             message_with_counter = "#{:05d}#{}".format(i % 100000, message)
             sockets = Sockets(sender, listener)
             protocol_data = ProtocolData(ip_id, host_address, arguments.cport,
                                          arguments.dontfragment)
-            send_and_receive_one(sockets, message_with_counter, addr, protocol_data)
+            if send_and_receive_one(sockets, message_with_counter, addr, protocol_data):
+                received = received + 1
             ip_id = (ip_id + 1) % 65536
             i = i + 1
             if i <= arguments.count:
                 time.sleep(arguments.interval)
     finally:
+        if i > 1:
+            LOGGER.info("%s packets transmitted, %s received, %s%% loss", i - 1, received, 100 * (i - 1 - received) / (i - 1))
         LOGGER.info("Shutting down.")
         sender.close()
         listener.close()
