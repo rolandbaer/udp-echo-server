@@ -3,7 +3,7 @@
 An UDP echo server and client that writes its own UDP and IPv4 headers
 and allows to control udp and ip header fields.
 """
-__version__ = "0.5.2"
+__version__ = "0.6.0"
 
 import argparse
 import ipaddress
