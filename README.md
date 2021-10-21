@@ -4,6 +4,10 @@ A Python 3 UDP echo server and client for testing connections.
 
 ## Usage
 
+udpecho uses raw sockets for sending the packages. Therefore you need administrative
+privileges to run the client and server. On Unix Systems you request them with `sudo`,
+on Windows Systems you sould open a command line with Administrator rights.
+
 ### Server
 
 ```
