@@ -168,7 +168,7 @@ def start_server(arguments):
             ip_id = (ip_id + 1) % 65536
             i = i + 1
     except KeyboardInterrupt:
-        LOGGER.info("<CTRL>-C received, ending listener")
+        LOGGER.debug("<CTRL>-C received, ending listener")
     finally:
         LOGGER.info("Shutting down.")
         sender.close()
