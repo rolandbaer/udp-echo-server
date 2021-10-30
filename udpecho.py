@@ -3,7 +3,7 @@
 An UDP echo server and client that writes its own UDP and IPv4 headers
 and allows to control udp and ip header fields.
 """
-__version__ = "0.6.0"
+__version__ = "0.6.1"
 
 import argparse
 import ipaddress
@@ -167,6 +167,8 @@ def start_server(arguments):
             receive_and_send_one(sockets, ip_id, arguments.port, arguments.dontfragment)
             ip_id = (ip_id + 1) % 65536
             i = i + 1
+    except KeyboardInterrupt:
+        LOGGER.info("<CTRL>-C received, ending listener")
     finally:
         LOGGER.info("Shutting down.")
         sender.close()
