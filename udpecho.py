@@ -9,6 +9,7 @@ import argparse
 import ipaddress
 import itertools
 import logging
+import platform
 import socket
 import struct
 import sys
@@ -212,6 +213,10 @@ if __name__ == "__main__":
     ARGS = PARSER.parse_args()
     logging.basicConfig(level=logging.DEBUG if ARGS.verbose else logging.INFO,
                         format='%(asctime)s %(levelname)s %(message)s')
+    if platform.system().lower().startswith('win'):
+        if ARGS.dontfragment:
+            LOGGER.error("Argument 'dontfragment' is not supported on windows systems.")
+            sys.exit(2)
     if ARGS.server:
         start_server(ARGS)
     else:
