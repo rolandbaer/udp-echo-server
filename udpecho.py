@@ -3,7 +3,7 @@
 An UDP echo server and client that writes its own UDP and IPv4 headers
 and allows to control udp and ip header fields.
 """
-__version__ = "0.6.1"
+__version__ = "0.7.0"
 
 import argparse
 import ipaddress
@@ -55,6 +55,9 @@ class ProtocolData:
         self.port = port
         self.dontfragment = dontfragment
 
+def is_windows():
+    return platform.system().lower().startswith('win')
+
 def send_and_receive_one(sockets: Sockets, message: str, addr: tuple, protocol_data: ProtocolData):
     "Sends the message over the sender socket and waits for the response on the listener socket."
     send_udp_message(message, addr, sockets.sender, protocol_data)
@@ -70,22 +73,27 @@ def send_and_receive_one(sockets: Sockets, message: str, addr: tuple, protocol_d
 def send_udp_message(message: str, addr: tuple, sender: socket.socket, protocol_data: ProtocolData):
     "Sends the message over the socket as an self-built udp/ip packet"
     message_encoded = message.encode()
-    udp_msg = struct.pack("!HHHH"+str(len(message_encoded))+"s",
+    if is_windows():
+        LOGGER.debug("windows (udp)")
+        output_len = sender.sendto(message_encoded, addr)
+    else:
+        LOGGER.debug("other (raw)")
+        udp_msg = struct.pack("!HHHH"+str(len(message_encoded))+"s",
                           protocol_data.port, addr[1], UDP_HEADER_LENGTH + len(message_encoded),
                           DUMMY_CHECKSUM, message_encoded)
-    ip_header = struct.pack("!BBHHHBBHLL",
-                            IP_V4*16+IP_HEADER_LENGTH_WORDS,
-                            0,
-                            IP_HEADER_LENGTH + len(udp_msg),
-                            protocol_data.ip_id,
-                            DONT_FRAGMENT if protocol_data.dontfragment else FRAGMENTATION_ALLOWED,
-                            255,
-                            socket.IPPROTO_UDP,
-                            DUMMY_CHECKSUM,
-                            int(ipaddress.IPv4Address(protocol_data.address)),
-                            int(ipaddress.IPv4Address(addr[0])))
-    data = ip_header + udp_msg
-    output_len = sender.sendto(data, addr)
+        ip_header = struct.pack("!BBHHHBBHLL",
+                                IP_V4*16+IP_HEADER_LENGTH_WORDS,
+                                0,
+                                IP_HEADER_LENGTH + len(udp_msg),
+                                protocol_data.ip_id,
+                                DONT_FRAGMENT if protocol_data.dontfragment else FRAGMENTATION_ALLOWED,
+                                255,
+                                socket.IPPROTO_UDP,
+                                DUMMY_CHECKSUM,
+                                int(ipaddress.IPv4Address(protocol_data.address)),
+                                int(ipaddress.IPv4Address(addr[0])))
+        data = ip_header + udp_msg
+        output_len = sender.sendto(data, addr)
     LOGGER.info("Sent message to %s: %s (%s bytes, total %s bytes).", addr, message,
                 len(message_encoded), output_len)
 
@@ -119,8 +127,11 @@ def get_local_ip(target: str):
 def start_client(arguments):
     "Starts sending messages to the server."
     ip_id = randint(0, 65535)
-    sender = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
     listener = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    if is_windows():
+        sender = listener
+    else:
+        sender = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
     listener.settimeout(1)  # seconds
     listener.bind((arguments.host, arguments.cport))
     if arguments.host == "0.0.0.0":
@@ -156,7 +167,10 @@ def start_client(arguments):
 def start_server(arguments):
     "Runs the server."
     ip_id = randint(0, 65535)
-    sender = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
+    if is_windows():
+        sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    else:
+        sender = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
     listener = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     listener.settimeout(5)  # seconds
     listener.bind((arguments.host, arguments.port))
@@ -213,7 +227,7 @@ if __name__ == "__main__":
     ARGS = PARSER.parse_args()
     logging.basicConfig(level=logging.DEBUG if ARGS.verbose else logging.INFO,
                         format='%(asctime)s %(levelname)s %(message)s')
-    if platform.system().lower().startswith('win'):
+    if is_windows():
         if ARGS.dontfragment:
             LOGGER.error("Argument 'dontfragment' is not supported on windows systems.")
             sys.exit(2)
