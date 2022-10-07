@@ -3,14 +3,16 @@
 An UDP echo server and client that writes its own UDP and IPv4 headers
 and allows to control udp and ip header fields.
 """
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 import argparse
 import ipaddress
 import itertools
 import logging
+import math
 import platform
 import socket
+import statistics
 import struct
 import sys
 import time
@@ -58,17 +60,24 @@ class ProtocolData:
 def is_windows():
     return platform.system().lower().startswith('win')
 
+def sec_to_ms_with_us(seconds: float):
+    return math.floor((seconds * 1000 * 1000) + 0.5) / 1000
+
 def send_and_receive_one(sockets: Sockets, message: str, addr: tuple, protocol_data: ProtocolData):
-    "Sends the message over the sender socket and waits for the response on the listener socket."
+    """Sends the message over the sender socket and waits for the response on the listener socket.
+    Returns the roundtrip time or 0 if no response was received."""
+
+    started = time.perf_counter()
     send_udp_message(message, addr, sockets.sender, protocol_data)
     try:
         input_data, addr = sockets.listener.recvfrom(BUFFER_SIZE)
-        LOGGER.info("Received message back from %s: %s (%s bytes).",
-                    addr, input_data.decode(), len(input_data))
-        return True
+        timespan = time.perf_counter() - started
+        LOGGER.info("Received message back from %s in %s ms: %s (%s bytes).",
+                    addr, sec_to_ms_with_us(timespan), input_data.decode(), len(input_data))
+        return timespan
     except socket.timeout:
         LOGGER.warning("Message never received back from %s: (%s).", addr, message)
-        return False
+        return 0.0
 
 def send_udp_message(message: str, addr: tuple, sender: socket.socket, protocol_data: ProtocolData):
     "Sends the message over the socket as an self-built udp/ip packet"
@@ -143,15 +152,18 @@ def start_client(arguments):
     addr = (arguments.client, arguments.port)
     message = ''.join(choice(ascii_uppercase) for i in range(arguments.size - COUNTER_SIZE))
     i = 1
-    received = 0;
+    received = 0
+    timespans = []
     try:
         while i <= arguments.count:
             message_with_counter = "#{:05d}#{}".format(i % 100000, message)
             sockets = Sockets(sender, listener)
             protocol_data = ProtocolData(ip_id, host_address, arguments.cport,
                                          arguments.dontfragment)
-            if send_and_receive_one(sockets, message_with_counter, addr, protocol_data):
+            timespan = send_and_receive_one(sockets, message_with_counter, addr, protocol_data)
+            if timespan > 0:
                 received = received + 1
+                timespans.append(timespan)
             ip_id = (ip_id + 1) % 65536
             i = i + 1
             if i <= arguments.count:
@@ -159,6 +171,8 @@ def start_client(arguments):
     finally:
         if i > 1:
             LOGGER.info("%s packets transmitted, %s received, %s%% loss", i - 1, received, 100 * (i - 1 - received) / (i - 1))
+        if len(timespans) > 0:
+            LOGGER.info("  min/avg/max: %s/%s/%s ms", sec_to_ms_with_us(min(timespans)), sec_to_ms_with_us(statistics.mean(timespans)), sec_to_ms_with_us(max(timespans)))
         LOGGER.info("Shutting down.")
         sender.close()
         listener.close()
