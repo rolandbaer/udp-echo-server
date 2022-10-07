@@ -203,7 +203,7 @@ def start_server(arguments):
         sender.close()
         listener.close()
 
-if __name__ == "__main__":
+def init_parser(__doc__, __version__, CLIENT_PORT, SERVER_PORT):
     PARSER = argparse.ArgumentParser(__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     GROUP = PARSER.add_mutually_exclusive_group(required=True)
     GROUP.add_argument('-C', '--client', help='Run in client mode, connect to the given HOST.',
@@ -235,6 +235,11 @@ if __name__ == "__main__":
                         action='count')
     PARSER.add_argument('-V', '--version', help="Show version information and quit.",
                         action='version', version='UDPecho version ' + __version__)
+                        
+    return PARSER
+
+if __name__ == "__main__":
+    PARSER = init_parser(__doc__, __version__, CLIENT_PORT, SERVER_PORT)
     if len(sys.argv) == 1:
         PARSER.print_help(sys.stderr)
         sys.exit(1)
