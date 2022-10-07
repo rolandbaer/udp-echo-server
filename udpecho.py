@@ -63,23 +63,24 @@ def is_windows():
 def sec_to_ms_with_us(seconds: float):
     return math.floor((seconds * 1000 * 1000) + 0.5) / 1000
 
-def send_and_receive_one(sockets: Sockets, message: str, addr: tuple, protocol_data: ProtocolData):
+def send_and_receive_one(sockets: Sockets, message: str, addr: tuple, protocol_data: ProtocolData, quiet: bool):
     """Sends the message over the sender socket and waits for the response on the listener socket.
     Returns the roundtrip time or 0 if no response was received."""
 
     started = time.perf_counter()
-    send_udp_message(message, addr, sockets.sender, protocol_data)
+    send_udp_message(message, addr, sockets.sender, protocol_data, quiet)
     try:
         input_data, addr = sockets.listener.recvfrom(BUFFER_SIZE)
         timespan = time.perf_counter() - started
-        LOGGER.info("Received message back from %s in %s ms: %s (%s bytes).",
-                    addr, sec_to_ms_with_us(timespan), input_data.decode(), len(input_data))
+        if not quiet:
+            LOGGER.info("Received message back from %s in %s ms: %s (%s bytes).",
+                        addr, sec_to_ms_with_us(timespan), input_data.decode(), len(input_data))
         return timespan
     except socket.timeout:
         LOGGER.warning("Message never received back from %s: (%s).", addr, message)
         return 0.0
 
-def send_udp_message(message: str, addr: tuple, sender: socket.socket, protocol_data: ProtocolData):
+def send_udp_message(message: str, addr: tuple, sender: socket.socket, protocol_data: ProtocolData, quiet: bool):
     "Sends the message over the socket as an self-built udp/ip packet"
     message_encoded = message.encode()
     if is_windows():
@@ -103,8 +104,9 @@ def send_udp_message(message: str, addr: tuple, sender: socket.socket, protocol_
                                 int(ipaddress.IPv4Address(addr[0])))
         data = ip_header + udp_msg
         output_len = sender.sendto(data, addr)
-    LOGGER.info("Sent message to %s: %s (%s bytes, total %s bytes).", addr, message,
-                len(message_encoded), output_len)
+    if not quiet:
+        LOGGER.info("Sent message to %s: %s (%s bytes, total %s bytes).", addr, message,
+                    len(message_encoded), output_len)
 
 def receive_next(listener: socket.socket):
     "Repeatedly tries receiving on the given socket until some data comes in."
@@ -115,14 +117,15 @@ def receive_next(listener: socket.socket):
         except socket.timeout:
             LOGGER.debug("No data received yet: retrying.")
 
-def receive_and_send_one(sockets: Sockets, ip_id: int, port: int, dontfragment: bool):
+def receive_and_send_one(sockets: Sockets, ip_id: int, port: int, dontfragment: bool, quiet: bool):
     "Waits for a single datagram over the socket and echoes it back."
     input_data, addr = receive_next(sockets.listener)
     host_addr = sockets.listener.getsockname()
     message = input_data.decode()
-    LOGGER.info("Received message from %s: %s (%s bytes).", addr, message, len(input_data))
+    if not quiet:
+        LOGGER.info("Received message from %s: %s (%s bytes).", addr, message, len(input_data))
     protocol_data = ProtocolData(ip_id, host_addr[0], port, dontfragment)
-    send_udp_message(message, addr, sockets.sender, protocol_data)
+    send_udp_message(message, addr, sockets.sender, protocol_data, quiet)
 
 def get_local_ip(target: str):
     "Gets the IP address of the interfaces used to connect to the target."
@@ -160,7 +163,7 @@ def start_client(arguments):
             sockets = Sockets(sender, listener)
             protocol_data = ProtocolData(ip_id, host_address, arguments.cport,
                                          arguments.dontfragment)
-            timespan = send_and_receive_one(sockets, message_with_counter, addr, protocol_data)
+            timespan = send_and_receive_one(sockets, message_with_counter, addr, protocol_data, arguments.quiet)
             if timespan > 0:
                 received = received + 1
                 timespans.append(timespan)
@@ -193,7 +196,7 @@ def start_server(arguments):
     try:
         for i in itertools.count(1):
             sockets = Sockets(sender, listener)
-            receive_and_send_one(sockets, ip_id, arguments.port, arguments.dontfragment)
+            receive_and_send_one(sockets, ip_id, arguments.port, arguments.dontfragment, arguments.quiet)
             ip_id = (ip_id + 1) % 65536
             i = i + 1
     except KeyboardInterrupt:
@@ -217,6 +220,9 @@ def init_parser(__doc__, __version__, CLIENT_PORT, SERVER_PORT):
                                      type=int, default=SERVER_PORT)
     GROUP_CLIENT_SERVER.add_argument('-d', '--dontfragment',
                                      help='Sets the don''t fragment flag (default: not set).',
+                                     action='store_true')
+    GROUP_CLIENT_SERVER.add_argument('-q', '--quiet', 
+                                     help='Quiet output. Only the start message and the summary are displayed',
                                      action='store_true')
     GROUP_CLIENT = PARSER.add_argument_group("Only for client")
     GROUP_CLIENT.add_argument('--cport',
