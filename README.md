@@ -19,6 +19,9 @@ $ sudo python3 udpecho.py --server
 ```
 $ sudo python3 udpecho.py --client $IP --count 5 --size 1200 --interval 2
 ```
+### Parameters
+
+For a complete list of the parameters call udpecho.py with the parameter -h or --help
 
 ## History
 
