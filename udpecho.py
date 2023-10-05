@@ -3,7 +3,7 @@
 An UDP echo server and client that writes its own UDP and IPv4 headers
 and allows to control udp and ip header fields.
 """
-__version__ = "0.8.1"
+__version__ = "0.9.0"
 
 import argparse
 import ipaddress
@@ -63,26 +63,25 @@ def is_windows():
 def sec_to_ms_with_us(seconds: float):
     return math.floor((seconds * 1000 * 1000) + 0.5) / 1000
 
-def send_and_receive_one(sockets: Sockets, message: str, addr: tuple, protocol_data: ProtocolData, quiet: bool):
+def send_and_receive_one(sockets: Sockets, message_encoded: bytes, addr: tuple, protocol_data: ProtocolData, quiet: bool):
     """Sends the message over the sender socket and waits for the response on the listener socket.
     Returns the roundtrip time or 0 if no response was received."""
 
     started = time.perf_counter()
-    send_udp_message(message, addr, sockets.sender, protocol_data, quiet)
+    send_udp_message(message_encoded, addr, sockets.sender, protocol_data, quiet)
     try:
         input_data, addr = sockets.listener.recvfrom(BUFFER_SIZE)
         timespan = time.perf_counter() - started
         if not quiet:
             LOGGER.info("Received message back from %s in %s ms: %s (%s bytes).",
-                        addr, sec_to_ms_with_us(timespan), input_data.decode(), len(input_data))
+                        addr, sec_to_ms_with_us(timespan), input_data.decode(encoding="ascii", errors="replace"), len(input_data))
         return timespan
     except socket.timeout:
-        LOGGER.warning("Message never received back from %s: (%s).", addr, message)
+        LOGGER.warning("Message never received back from %s: (%s).", addr, message_encoded.decode(encoding="ascii", errors="replace"))
         return 0.0
 
-def send_udp_message(message: str, addr: tuple, sender: socket.socket, protocol_data: ProtocolData, quiet: bool):
+def send_udp_message(message_encoded: bytes, addr: tuple, sender: socket.socket, protocol_data: ProtocolData, quiet: bool):
     "Sends the message over the socket as an self-built udp/ip packet"
-    message_encoded = message.encode()
     if is_windows():
         LOGGER.debug("windows (udp)")
         output_len = sender.sendto(message_encoded, addr)
@@ -105,7 +104,7 @@ def send_udp_message(message: str, addr: tuple, sender: socket.socket, protocol_
         data = ip_header + udp_msg
         output_len = sender.sendto(data, addr)
     if not quiet:
-        LOGGER.info("Sent message to %s: %s (%s bytes, total %s bytes).", addr, message,
+        LOGGER.info("Sent message to %s: %s (%s bytes, total %s bytes).", addr, message_encoded.decode(encoding="ascii", errors="replace"),
                     len(message_encoded), output_len)
 
 def receive_next(listener: socket.socket):
@@ -121,11 +120,10 @@ def receive_and_send_one(sockets: Sockets, ip_id: int, port: int, dontfragment: 
     "Waits for a single datagram over the socket and echoes it back."
     input_data, addr = receive_next(sockets.listener)
     host_addr = sockets.listener.getsockname()
-    message = input_data.decode()
     if not quiet:
-        LOGGER.info("Received message from %s: %s (%s bytes).", addr, message, len(input_data))
+        LOGGER.info("Received message from %s: %s (%s bytes).", addr, input_data.decode(encoding="ascii", errors="replace"), len(input_data))
     protocol_data = ProtocolData(ip_id, host_addr[0], port, dontfragment)
-    send_udp_message(message, addr, sockets.sender, protocol_data, quiet)
+    send_udp_message(input_data, addr, sockets.sender, protocol_data, quiet)
 
 def get_local_ip(target: str):
     "Gets the IP address of the interfaces used to connect to the target."
@@ -153,17 +151,28 @@ def start_client(arguments):
         host_address = arguments.host
 
     addr = (arguments.client, arguments.port)
-    message = ''.join(choice(ascii_uppercase) for i in range(arguments.size - COUNTER_SIZE))
+    if arguments.pattern == '':
+        message = ''.join(choice(ascii_uppercase) for i in range(arguments.size - COUNTER_SIZE))
+        message_encoded = message.encode(encoding="ascii")
+    else:
+        buffer = bytearray()
+        for i in range(arguments.size - COUNTER_SIZE):
+            pos = i * 2 % len(arguments.pattern)
+            buffer.append(int(arguments.pattern[pos:pos+2], 16))
+        message_encoded = bytes(buffer)
+
     i = 1
     received = 0
     timespans = []
     try:
         while i <= arguments.count:
-            message_with_counter = "#{:05d}#{}".format(i % 100000, message)
+            counter = "#{:05d}#".format(i % 100000)
+            counter_encoded = counter.encode(encoding="ascii")
+            message_with_counter_encoded = counter_encoded + message_encoded
             sockets = Sockets(sender, listener)
             protocol_data = ProtocolData(ip_id, host_address, arguments.cport,
                                          arguments.dontfragment)
-            timespan = send_and_receive_one(sockets, message_with_counter, addr, protocol_data, arguments.quiet)
+            timespan = send_and_receive_one(sockets, message_with_counter_encoded, addr, protocol_data, arguments.quiet)
             if timespan > 0:
                 received = received + 1
                 timespans.append(timespan)
@@ -231,6 +240,9 @@ def init_parser(__doc__, __version__, CLIENT_PORT, SERVER_PORT):
     GROUP_CLIENT.add_argument('-s', '--size',
                               help='Size of udp data to be sent in payload  (default: 64).',
                               type=int, default=64)
+    GROUP_CLIENT.add_argument('-P', '--pattern',
+                              help='Defines the pattern to be sent. The pattern is repeated until the size is reached. (default: random data of length size)',
+                              default='')
     GROUP_CLIENT.add_argument('-c', '--count',
                               help='Number of udp packets to be sent. (default: 1)',
                               type=int, default=1)
@@ -241,7 +253,7 @@ def init_parser(__doc__, __version__, CLIENT_PORT, SERVER_PORT):
                         action='count')
     PARSER.add_argument('-V', '--version', help="Show version information and quit.",
                         action='version', version='UDPecho version ' + __version__)
-                        
+
     return PARSER
 
 if __name__ == "__main__":
