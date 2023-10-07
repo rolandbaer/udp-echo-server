@@ -3,7 +3,7 @@
 An UDP echo server and client that writes its own UDP and IPv4 headers
 and allows to control udp and ip header fields.
 """
-__version__ = "0.9.0"
+__version__ = "0.9.1"
 
 import argparse
 import ipaddress
@@ -180,12 +180,16 @@ def start_client(arguments):
             i = i + 1
             if i <= arguments.count:
                 time.sleep(arguments.interval)
+    except KeyboardInterrupt:
+        if not arguments.quiet:
+            LOGGER.info("<CTRL>-C received, stopping client")
     finally:
         if i > 1:
             LOGGER.info("%s packets transmitted, %s received, %s%% loss", i - 1, received, 100 * (i - 1 - received) / (i - 1))
         if len(timespans) > 0:
             LOGGER.info("  min/avg/max: %s/%s/%s ms", sec_to_ms_with_us(min(timespans)), sec_to_ms_with_us(statistics.mean(timespans)), sec_to_ms_with_us(max(timespans)))
-        LOGGER.info("Shutting down.")
+        if not arguments.quiet:
+            LOGGER.info("Shutting down.")
         sender.close()
         listener.close()
 
@@ -223,7 +227,7 @@ def init_parser(__doc__, __version__, CLIENT_PORT, SERVER_PORT):
     GROUP.add_argument('-S', '--server', help='Run in server mode.', action='store_true')
     GROUP_CLIENT_SERVER = PARSER.add_argument_group("For client and server")
     GROUP_CLIENT_SERVER.add_argument('-H', '--host',
-                                     help='The host that the listener should listen on.',
+                                     help='The host interface that the listener should listen on.',
                                      default="0.0.0.0")
     GROUP_CLIENT_SERVER.add_argument('-p', '--port', help='Server port to listen on/connect to.',
                                      type=int, default=SERVER_PORT)
@@ -231,7 +235,7 @@ def init_parser(__doc__, __version__, CLIENT_PORT, SERVER_PORT):
                                      help='Sets the don''t fragment flag (default: not set).',
                                      action='store_true')
     GROUP_CLIENT_SERVER.add_argument('-q', '--quiet', 
-                                     help='Quiet output. Only the start message and the summary are displayed',
+                                     help='Quiet output. Only the summary with the statistics is displayed',
                                      action='store_true')
     GROUP_CLIENT = PARSER.add_argument_group("Only for client")
     GROUP_CLIENT.add_argument('--cport',

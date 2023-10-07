@@ -23,6 +23,17 @@ $ sudo python3 udpecho.py --client $IP --count 5 --size 1200 --interval 2
 
 For a complete list of the parameters call udpecho.py with the parameter -h or --help
 
+## Hints
+
+If you want to define the pattern yourself but don't want to search the values
+in the ascii table, you can use the following trick:
+```
+$ sudo python3 udpecho.py --client 127.0.0.1 --pattern `echo "MyMessage" | tr -d '\n' | xxd -ps`
+```
+The tr command removes the newline from the message and the xxd command
+converts the message to the hexadecimal representation as needed by the
+--pattern parameter
+
 ## History
 
 The code is based on the udp echo server by Marshall Polaris (https://github.com/mqp/udp-echo-server) and the additons by Umakant Kulkarni (https://github.com/UmakantKulkarni/udp-echo-server).
